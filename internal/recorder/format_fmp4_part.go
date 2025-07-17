@@ -1,6 +1,7 @@
 package recorder
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +12,10 @@ import (
 
 	"github.com/bluenviron/mediamtx/internal/logger"
 	"github.com/bluenviron/mediamtx/internal/recordstore"
+)
+
+const (
+	fmp4MaxPartSize = 100 * 1024 * 1024
 )
 
 func writePart(
@@ -46,6 +51,7 @@ type formatFMP4Part struct {
 	startDTS       time.Duration
 
 	partTracks map[*formatFMP4Track]*fmp4.PartTrack
+	size       uint64
 	endDTS     time.Duration
 }
 
@@ -83,6 +89,12 @@ func (p *formatFMP4Part) close() error {
 }
 
 func (p *formatFMP4Part) write(track *formatFMP4Track, sample *sample, dts time.Duration) error {
+	size := uint64(len(sample.Payload))
+	if (p.size + size) > fmp4MaxPartSize {
+		return fmt.Errorf("reached maximum part size")
+	}
+	p.size += size
+
 	partTrack, ok := p.partTracks[track]
 	if !ok {
 		partTrack = &fmp4.PartTrack{
